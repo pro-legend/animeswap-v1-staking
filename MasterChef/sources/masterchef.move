@@ -102,10 +102,10 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
         signer_cap: SignerCapability,
         total_alloc_point: u64,
         admin_address: address,
-        dev_address: address,   // dev fee to address
-        dev_percent: u64,   // dev fee percent
+        dao_address: address,   // dao fee to address
+        dao_percent: u64,   // dao fee percent
         bonus_multiplier: u64,  // Bonus muliplier for early ANI makers.
-        last_timestamp_dev_withdraw: u64,  // Last timestamp then develeper withdraw dev fee
+        last_timestamp_dao_withdraw: u64,  // Last timestamp then develeper withdraw dao fee
         start_timestamp: u64,   // mc mint ANI start from this ts
         per_second_ANI: u128, // default ANI per second, 1 ANI/second = 86400 ANI/day, remember times bonus_multiplier
     }
@@ -150,10 +150,10 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
             signer_cap: capability,
             total_alloc_point: 0,
             admin_address: signer::address_of(admin),
-            dev_address: signer::address_of(admin),
-            dev_percent: 10,
+            dao_address: signer::address_of(admin),
+            dao_percent: 10,
             bonus_multiplier: 10,
-            last_timestamp_dev_withdraw: get_current_timestamp(),
+            last_timestamp_dao_withdraw: get_current_timestamp(),
             start_timestamp: get_current_timestamp(),
             per_second_ANI: 10000000,   // 0.1 ANI
         });
@@ -199,16 +199,16 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
     }
 
     // anyone can call this
-    public entry fun withdraw_dev_fee() acquires MasterChefData, Caps {
+    public entry fun withdraw_dao_fee() acquires MasterChefData, Caps {
         let mc_data = borrow_global_mut<MasterChefData>(DEPLOYER);
-        assert!(mc_data.last_timestamp_dev_withdraw < get_current_timestamp(), WAIT_FOR_NEW_BLOCK);
+        assert!(mc_data.last_timestamp_dao_withdraw < get_current_timestamp(), WAIT_FOR_NEW_BLOCK);
 
-        let multiplier = get_multiplier(mc_data.last_timestamp_dev_withdraw, get_current_timestamp(), mc_data.bonus_multiplier);
-        let reward_ANI = multiplier * mc_data.per_second_ANI * (mc_data.dev_percent as u128) / 100u128;
+        let multiplier = get_multiplier(mc_data.last_timestamp_dao_withdraw, get_current_timestamp(), mc_data.bonus_multiplier);
+        let reward_ANI = multiplier * mc_data.per_second_ANI * (mc_data.dao_percent as u128) / 100u128;
         let coin_m = &borrow_global<Caps>(DEPLOYER).mint;
         let coins = coin::mint<ANI>((reward_ANI as u64), coin_m);
-        coin::deposit(mc_data.dev_address, coins);
-        mc_data.last_timestamp_dev_withdraw = get_current_timestamp();
+        coin::deposit(mc_data.dao_address, coins);
+        mc_data.last_timestamp_dao_withdraw = get_current_timestamp();
     }
 
     // Add a new LP to the pool. Can only be called by the owner.
@@ -280,7 +280,7 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
             return
         };
         let multipler = get_multiplier(pool.last_reward_timestamp, get_current_timestamp(), mc_data.bonus_multiplier);
-        let reward_ANI = multipler * mc_data.per_second_ANI * (pool.alloc_point as u128) / (mc_data.total_alloc_point as u128) * ((100 - mc_data.dev_percent) as u128) / 100u128;
+        let reward_ANI = multipler * mc_data.per_second_ANI * (pool.alloc_point as u128) / (mc_data.total_alloc_point as u128) * ((100 - mc_data.dao_percent) as u128) / 100u128;
         let coin_m = &borrow_global<Caps>(DEPLOYER).mint;
         let coins = coin::mint<ANI>((reward_ANI as u64), coin_m);
         coin::deposit(resource_account_address, coins);
@@ -428,23 +428,23 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
         mc_data.admin_address = new_admin_address;
     }
 
-    public entry fun set_dev_address(
+    public entry fun set_dao_address(
         admin: &signer,
-        new_dev_address: address
+        new_dao_address: address
     ) acquires MasterChefData {
         let mc_data = borrow_global_mut<MasterChefData>(DEPLOYER);
         assert!(signer::address_of(admin) == mc_data.admin_address, FORBIDDEN);
-        mc_data.dev_address = new_dev_address;
+        mc_data.dao_address = new_dao_address;
     }
 
-    public entry fun set_dev_percent(
+    public entry fun set_dao_percent(
         admin: &signer,
-        new_dev_percent: u64
+        new_dao_percent: u64
     ) acquires MasterChefData {
-        assert!(new_dev_percent <= 100, FORBIDDEN);
+        assert!(new_dao_percent <= 100, FORBIDDEN);
         let mc_data = borrow_global_mut<MasterChefData>(DEPLOYER);
         assert!(signer::address_of(admin) == mc_data.admin_address, FORBIDDEN);
-        mc_data.dev_percent = new_dev_percent;
+        mc_data.dao_percent = new_dao_percent;
     }
 
     public entry fun set_per_second_ANI(
@@ -513,7 +513,7 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
 
     public fun get_mc_data(): (u64, u64, u64, u64, u128) acquires MasterChefData {
         let mc_data = borrow_global<MasterChefData>(DEPLOYER);
-        (mc_data.total_alloc_point, mc_data.dev_percent, mc_data.bonus_multiplier, mc_data.start_timestamp, mc_data.per_second_ANI)
+        (mc_data.total_alloc_point, mc_data.dao_percent, mc_data.bonus_multiplier, mc_data.start_timestamp, mc_data.per_second_ANI)
     }
 
     public fun get_pool_info<CoinType>(): (u128, u64, u64) acquires MasterChefData, PoolInfo {
@@ -894,15 +894,15 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
 
     #[test(creator = @MasterChefDepolyer, new_admin = @0x99, someone_else = @0x11)]
     #[expected_failure(abort_code = 103)]
-    public entry fun test_dev_setting_error(creator: &signer, new_admin: &signer, someone_else: &signer)
+    public entry fun test_dao_setting_error(creator: &signer, new_admin: &signer, someone_else: &signer)
             acquires MasterChefData, LPInfo, Caps, Events {
         test_init(creator, someone_else);
         create_account_for_test(signer::address_of(new_admin));
-        set_dev_address(new_admin, signer::address_of(new_admin));
+        set_dao_address(new_admin, signer::address_of(new_admin));
     }
 
     #[test(creator = @MasterChefDepolyer, new_admin = @0x99, someone_else = @0x11)]
-    public entry fun test_dev_setting(creator: &signer, new_admin: &signer, someone_else: &signer)
+    public entry fun test_dao_setting(creator: &signer, new_admin: &signer, someone_else: &signer)
             acquires MasterChefData, LPInfo, PoolInfo, UserInfo, Caps, Events {
         test_init(creator, someone_else);
         set_bonus_multiplier(creator, 4);
@@ -918,8 +918,8 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
         };
         create_account_for_test(signer::address_of(new_admin));
         set_admin_address(creator, signer::address_of(new_admin));
-        set_dev_address(new_admin, signer::address_of(new_admin));
-        set_dev_percent(new_admin, 20);
+        set_dao_address(new_admin, signer::address_of(new_admin));
+        set_dao_percent(new_admin, 20);
         register_coin<ANI>(new_admin);
 
         add<LPCoin1>(new_admin, 1000);    // 1/2
@@ -934,7 +934,7 @@ module MasterChefDepolyer::AnimeMasterChefV1 {
                 TEST_ERROR);
 
         // admin fee
-        withdraw_dev_fee();
+        withdraw_dao_fee();
         assert!(coin::balance<ANI>(signer::address_of(new_admin)) ==
                 bonus_multiplier * (per_second_ANI as u64) * 1111 * 2 / 10,
                 TEST_ERROR);
