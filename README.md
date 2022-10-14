@@ -15,7 +15,7 @@ The current repository contains:
 Update your `Move.toml` with
 
 ```toml
-[dependencies.AnimeSwappStaking]
+[dependencies.MasterChef]
 git = 'https://github.com/AnimeSwap/v1-staking.git'
 rev = 'v0.0.1'
 subdir = 'MasterChef'
